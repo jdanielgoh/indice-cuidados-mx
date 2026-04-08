@@ -35,11 +35,11 @@ const MAP_STYLE =
 
 type MunicipioProperties = {
   CVEGEO: string;
-  "%_MUJERES": string;
+  POR_MUJERES: string;
   NOM_ENT: string;
   cve_mun: string;
   centroid: [number, number];
-  IMC: number;
+  MIC: number;
 };
 
 const dict_color_indice = {
@@ -85,7 +85,7 @@ function Nomenclatura() {
 type Municipio = Feature<Polygon | MultiPolygon, MunicipioProperties>;
 
 // Calcula arcos
-const escalaAltura = scaleLinear().range([0, 500]);
+const escalaAltura = scaleLinear().range([0, 2000]);
 export default function App() {
   const [open, setOpen] = useState(true);
   const [minmax, setMinmax] = useState([0, 1]);
@@ -99,13 +99,13 @@ export default function App() {
         console.log(json.features);
         setData(json.features);
         setMinmax(
-          extent(json.features?.map((dd) => dd.properties["%_MUJERES"])),
+          extent(json.features?.map((dd) => dd.properties["POR_MUJERES"])),
         );
         escalaAltura.domain(
-          extent(json.features?.map((dd) => dd.properties["%_MUJERES"])),
+          extent(json.features?.map((dd) => dd.properties["POR_MUJERES"])),
         );
         console.log(
-          extent(json.features?.map((dd) => dd.properties["%_MUJERES"])),
+          extent(json.features?.map((dd) => dd.properties["POR_MUJERES"])),
         );
       });
   }, []);
@@ -116,8 +116,8 @@ export default function App() {
       data,
       stroked: true,
       filled: true,
-      getFillColor: (f) => dict_color_indice[f.properties.IMC],
-      getElevation: (f) => escalaAltura(f.properties["%_MUJERES"]),
+      getFillColor: (f) => dict_color_indice[f.properties.MIC],
+      getElevation: (f) => escalaAltura(f.properties["POR_MUJERES"]),
       wireframe: false,
       extruded: true,
       pickable: true,
