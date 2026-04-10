@@ -4,7 +4,7 @@ import { Map } from "react-map-gl/maplibre";
 import { DeckGL } from "@deck.gl/react";
 import { GeoJsonLayer } from "deck.gl";
 import { extent } from "d3-array";
-import { scaleLinear } from "d3-scale";
+import { scaleThreshold } from "d3-scale";
 
 import type { MapViewState } from "@deck.gl/core";
 import type { Feature, Polygon, MultiPolygon } from "geojson";
@@ -21,10 +21,13 @@ import { ExpandLess, ExpandMore } from "@mui/icons-material";
 
 const DATA_URL =
   "https://raw.githubusercontent.com/jdanielgoh/indice-cuidados-mx/refs/heads/main/public/AGEB_ESTATLES_12_INFANCIAS_0A5.geojson";
-
+const CENTROS_CUIDADO_URL =
+  "https://raw.githubusercontent.com/jdanielgoh/indice-cuidados-mx/refs/heads/main/public/CENTROS_CUIDADO_ESTATALES_12.geojson";
+const BUFFERS =
+  "https://raw.githubusercontent.com/jdanielgoh/indice-cuidados-mx/refs/heads/main/public/BUFFERS_CENTROS_ESTATALES_12.geojson";
 const INITIAL_VIEW_STATE: MapViewState = {
-  longitude: -101,
-  latitude: 21,
+  longitude: -99.8,
+  latitude: 16.8,
   zoom: 10,
   maxZoom: 15,
   pitch: 60,
@@ -43,11 +46,10 @@ type MunicipioProperties = {
 };
 
 const dict_color_indice = {
-  0: [120, 153, 212],
-  1: [114, 114, 171],
-  2: [114, 87, 147],
-  3: [113, 60, 122],
-  4: [112, 5, 72],
+  "Menos de 3%": [181, 212, 244],
+  "De de 3% a 9%": [93, 202, 165],
+  "De de 9% a 13%": [250, 199, 117],
+  "Más de 13%": [216, 90, 48],
 };
 function rgbToHex([r, g, b]: number[]) {
   return `rgb(${r},${g},${b})`;
@@ -57,7 +59,9 @@ function Nomenclatura() {
 
   return (
     <Box sx={{ mt: 0 }}>
-      <FormLabel sx={{ fontSize: 12 }}>Nomenclatura</FormLabel>
+      <FormLabel sx={{ fontSize: 12 }}>
+        % de menores de 5 años por AGEB
+      </FormLabel>
       <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, mt: 0.5 }}>
         {Object.entries(dict).map(([label, color]) => (
           <Box
@@ -85,49 +89,72 @@ function Nomenclatura() {
 type Municipio = Feature<Polygon | MultiPolygon, MunicipioProperties>;
 
 // Calcula arcos
-const escalaAltura = scaleLinear().range([0, 2000]);
+const colorRanges = [
+  [181, 212, 244],
+  [93, 202, 165],
+  [250, 199, 117],
+  [216, 90, 48],
+];
+const escalaColor = scaleThreshold<number, number>()
+  .domain([3, 9, 13])
+  .range([0, 1, 2, 3]);
 export default function App() {
   const [open, setOpen] = useState(true);
-  const [minmax, setMinmax] = useState([0, 1]);
   const [data, setData] = useState<Municipio[]>();
+  const [centros, setCentros] = useState();
+  const [buffers, setBuffers] = useState();
 
   // Cargar GeoJSON
   useEffect(() => {
     fetch(DATA_URL)
       .then((resp) => resp.json())
       .then((json) => {
-        console.log(json.features);
         setData(json.features);
-        setMinmax(
-          extent(json.features?.map((dd) => dd.properties["POR_MUJERES"])),
-        );
-        escalaAltura.domain(
-          extent(json.features?.map((dd) => dd.properties["POR_MUJERES"])),
-        );
-        console.log(
-          extent(json.features?.map((dd) => dd.properties["POR_MUJERES"])),
-        );
+      });
+    fetch(CENTROS_CUIDADO_URL)
+      .then((resp) => resp.json())
+      .then((json) => {
+        setCentros(json.features);
+      });
+    fetch(BUFFERS)
+      .then((resp) => resp.json())
+      .then((json) => {
+        console.log(json.features);
+        setBuffers(json.features);
       });
   }, []);
 
   const layers = [
     new GeoJsonLayer<MunicipioProperties>({
-      id: "geojson",
+      id: "agebs",
       data,
       stroked: true,
       filled: true,
-      getFillColor: (f) => dict_color_indice[f.properties.MIC],
-      getElevation: (f) => escalaAltura(f.properties["POR_MUJERES"]),
-      wireframe: false,
-      extruded: true,
+      getFillColor: (f) =>
+        colorRanges[escalaColor(f.properties["INFANCIA_0_5"])],
+
       pickable: true,
       autoHighlight: true,
-
-      updateTriggers: {
-        getElevation: [minmax],
-      },
     }),
-  ].filter(Boolean);
+    new GeoJsonLayer({
+      id: "centros",
+      data: centros,
+      stroked: true,
+      filled: true,
+      getFillColor: [200, 0, 0],
+      pickable: true,
+      autoHighlight: true,
+      getPointRadius: 4,
+      pointRadiusMinPixels: 3,
+    }),
+    new GeoJsonLayer({
+      id: "buffers",
+      data: buffers,
+      stroked: true,
+      filled: true,
+      getFillColor: (f) => [0, 0, 0, 50],
+    }),
+  ];
 
   return (
     <>
