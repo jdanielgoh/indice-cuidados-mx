@@ -20,7 +20,7 @@ import {
 import { ExpandLess, ExpandMore } from "@mui/icons-material";
 
 const DATA_URL =
-  "https://raw.githubusercontent.com/jdanielgoh/indice-cuidados-mx/refs/heads/main/public/INDICE_MUJERES_CUIDADORAS_GTO_TEST.geojson";
+  "https://raw.githubusercontent.com/jdanielgoh/indice-cuidados-mx/refs/heads/main/public/AGEB_ESTATLES_12_INFANCIAS_0A5.geojson";
 
 const INITIAL_VIEW_STATE: MapViewState = {
   longitude: -101,
