@@ -3,8 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Map } from "react-map-gl/maplibre";
 import { DeckGL } from "@deck.gl/react";
 import { GeoJsonLayer } from "deck.gl";
-import { extent } from "d3-array";
-import { scaleThreshold } from "d3-scale";
+import { scaleLinear } from "d3-scale";
 
 import type { MapViewState } from "@deck.gl/core";
 import type { Feature, Polygon, MultiPolygon } from "geojson";
@@ -12,6 +11,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import {
   Paper,
   FormLabel,
+  Checkbox,
+  FormControlLabel,
   IconButton,
   Collapse,
   Box,
@@ -20,7 +21,7 @@ import {
 import { ExpandLess, ExpandMore } from "@mui/icons-material";
 
 const DATA_URL =
-  "https://raw.githubusercontent.com/jdanielgoh/indice-cuidados-mx/refs/heads/main/public/AGEB_ESTATLES_12_INFANCIAS_0A5.geojson";
+  "https://raw.githubusercontent.com/jdanielgoh/indice-cuidados-mx/refs/heads/main/public/INDICE_MUJERES_CUIDADORAS_GUERRERO.geojson";
 const CENTROS_CUIDADO_URL =
   "https://raw.githubusercontent.com/jdanielgoh/indice-cuidados-mx/refs/heads/main/public/CENTROS_CUIDADO_ESTATALES_12.geojson";
 const BUFFERS =
@@ -46,11 +47,13 @@ type MunicipioProperties = {
 };
 
 const dict_color_indice = {
-  "Menos de 3%": [181, 212, 244],
-  "De de 3% a 9%": [93, 202, 165],
-  "De de 9% a 13%": [250, 199, 117],
-  "Más de 13%": [216, 90, 48],
+  0: [250, 199, 117],
+  1: [216, 90, 48],
+  2: [150, 40, 30],
+  3: [100, 15, 15],
+  4: [50, 0, 0],
 };
+
 function rgbToHex([r, g, b]: number[]) {
   return `rgb(${r},${g},${b})`;
 }
@@ -59,9 +62,7 @@ function Nomenclatura() {
 
   return (
     <Box sx={{ mt: 0 }}>
-      <FormLabel sx={{ fontSize: 12 }}>
-        % de menores de 5 años por AGEB
-      </FormLabel>
+      <FormLabel sx={{ fontSize: 12 }}>Índice de mujeres cuidadoras</FormLabel>
       <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, mt: 0.5 }}>
         {Object.entries(dict).map(([label, color]) => (
           <Box
@@ -89,22 +90,24 @@ function Nomenclatura() {
 type Municipio = Feature<Polygon | MultiPolygon, MunicipioProperties>;
 
 // Calcula arcos
-const colorRanges = [
-  [181, 212, 244],
-  [93, 202, 165],
-  [250, 199, 117],
-  [216, 90, 48],
-];
-const escalaColor = scaleThreshold<number, number>()
-  .domain([3, 9, 13])
-  .range([0, 1, 2, 3]);
+
+const escalaAltura = scaleLinear().domain([0, 50]).range([0, 10000]);
 export default function App() {
   const [open, setOpen] = useState(true);
   const [data, setData] = useState<Municipio[]>();
   const [centros, setCentros] = useState();
   const [buffers, setBuffers] = useState();
-
+  const [is3D, setIs3D] = useState(true);
+  const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
   // Cargar GeoJSON
+  const handle3DToggle = (checked: boolean) => {
+    setIs3D(checked);
+    setViewState((prev) => ({
+      ...prev,
+      pitch: checked ? 60 : 0,
+      transitionDuration: 600,
+    }));
+  };
   useEffect(() => {
     fetch(DATA_URL)
       .then((resp) => resp.json())
@@ -130,9 +133,10 @@ export default function App() {
       data,
       stroked: true,
       filled: true,
-      getFillColor: (f) =>
-        colorRanges[escalaColor(f.properties["INFANCIA_0_5"])],
-
+      getFillColor: (f) => dict_color_indice[f.properties["MIC"]],
+      extruded: is3D,
+      getElevation: (f) => escalaAltura(f.properties["INFANCIA_0_5"]),
+      wireframe: false,
       pickable: true,
       autoHighlight: true,
     }),
@@ -152,7 +156,7 @@ export default function App() {
       data: buffers,
       stroked: true,
       filled: true,
-      getFillColor: (f) => [0, 0, 0, 50],
+      getFillColor: [0, 100, 200, 100],
     }),
   ];
 
@@ -186,12 +190,51 @@ export default function App() {
 
         <Collapse in={open} timeout="auto" unmountOnExit>
           <Nomenclatura />
+          <FormControlLabel
+            label="% de primera infancia [3D]"
+            control={
+              <Checkbox
+                checked={is3D}
+                size="small"
+                onChange={(e) => handle3DToggle(e.target.checked)}
+              />
+            }
+          />
         </Collapse>
       </Paper>
       <DeckGL
         layers={layers}
-        initialViewState={INITIAL_VIEW_STATE}
+        initialViewState={viewState}
+        onViewStateChange={({ viewState: vs }) =>
+          setViewState(vs as MapViewState)
+        }
         controller={true}
+        getTooltip={({ object, layer }) => {
+          if (!object || layer?.id !== "agebs") return null;
+          const p = object.properties;
+          return {
+            html: `
+        <div style="line-height: 1.8; font-size: 12px;">
+          <b>AGEB: ${p.CVEGEO}</b>
+          <hr style="margin: 4px 0; opacity: 0.3"/>
+          <div>Índice Mujeres Cuidadoras: <b>${p.MIC}</b></div>
+          <div>% primera infancia: <b>${p.INFANCIA_0_5}</b></div>
+          <div>% mujeres 30-49 años: <b>${p["30_49"]}%</b></div>
+          <div>% mujeres desempleadas: <b>${p.DESEMP}%</b></div>
+          <div>% con primaria concluida: <b>${p.PRIMAR}%</b></div>
+          <div>% mujeres casadas: <b>${p.CASAD}%</b></div>
+        </div>
+      `,
+            style: {
+              backgroundColor: "rgba(20,20,20,0.85)",
+              color: "white",
+              fontSize: "12px",
+              borderRadius: "6px",
+              padding: "8px 12px",
+              textAlign: "left",
+            },
+          };
+        }}
       >
         <Map reuseMaps mapStyle={MAP_STYLE} />
       </DeckGL>
