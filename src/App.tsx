@@ -16,6 +16,7 @@ import {
   IconButton,
   Collapse,
   Box,
+  Slider,
   Typography,
 } from "@mui/material";
 import { ExpandLess, ExpandMore } from "@mui/icons-material";
@@ -61,8 +62,11 @@ function Nomenclatura() {
   const dict = dict_color_indice;
 
   return (
-    <Box sx={{ mt: 0 }}>
-      <FormLabel sx={{ fontSize: 12 }}>Índice de mujeres cuidadoras</FormLabel>
+    <Box sx={{ mt: 0, maxWidth: 250, textAlign: "left" }}>
+      <FormLabel>
+        Índice de mujeres cuidadoras (cantidad de variables mayor al % nacional
+        de la ENASIC 2022 que convergen en la misma AGEB)
+      </FormLabel>
       <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, mt: 0.5 }}>
         {Object.entries(dict).map(([label, color]) => (
           <Box
@@ -99,6 +103,8 @@ export default function App() {
   const [buffers, setBuffers] = useState();
   const [is3D, setIs3D] = useState(true);
   const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
+  const [opacidadBuffer, setOpacidadBuffer] = useState(50);
+
   // Cargar GeoJSON
   const handle3DToggle = (checked: boolean) => {
     setIs3D(checked);
@@ -145,18 +151,23 @@ export default function App() {
       data: centros,
       stroked: true,
       filled: true,
-      getFillColor: [200, 0, 0],
+      getFillColor: [100, 200, 0],
       pickable: true,
       autoHighlight: true,
       getPointRadius: 4,
-      pointRadiusMinPixels: 3,
+      pointRadiusMinPixels: 5,
     }),
     new GeoJsonLayer({
       id: "buffers",
+      extruded: is3D,
+      getElevation: 6000,
       data: buffers,
       stroked: true,
       filled: true,
-      getFillColor: [0, 100, 200, 100],
+      getFillColor: [100, 0, 200, opacidadBuffer],
+      updateTriggers: {
+        getFillColor: [opacidadBuffer],
+      },
     }),
   ];
 
@@ -173,6 +184,7 @@ export default function App() {
           zIndex: 1,
           backgroundColor: "rgba(255,255,255,0.9)",
           minWidth: 200,
+          textAlign: "left",
         }}
       >
         <Box
@@ -190,6 +202,7 @@ export default function App() {
 
         <Collapse in={open} timeout="auto" unmountOnExit>
           <Nomenclatura />
+          <hr />
           <FormControlLabel
             label="% de primera infancia [3D]"
             control={
@@ -201,6 +214,50 @@ export default function App() {
             }
           />
         </Collapse>
+        <hr />
+
+        <Box
+          sx={{ display: "flex", flexDirection: "column", gap: 0.5, mt: 0.5 }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Box
+              sx={{
+                width: 14,
+                height: 14,
+                borderRadius: "3px",
+                flexShrink: 0,
+                backgroundColor: rgbToHex([100, 200, 0]),
+              }}
+            />
+            <Typography variant="caption" sx={{ lineHeight: 1 }}>
+              Guarderías
+            </Typography>
+          </Box>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Box
+              sx={{
+                width: 14,
+                height: 14,
+                borderRadius: "3px",
+                flexShrink: 0,
+                backgroundColor: rgbToHex([200, 100, 200, 100]),
+              }}
+            />
+            <Typography variant="caption" sx={{ lineHeight: 1 }}>
+              Buffer: Radio de 1km a guarderías
+            </Typography>
+          </Box>
+          <Box sx={{ mt: 1 }}>
+            <FormLabel sx={{ fontSize: 12 }}>Opacidad buffer</FormLabel>
+            <Slider
+              size="small"
+              min={0}
+              max={255}
+              value={opacidadBuffer}
+              onChange={(_, val) => setOpacidadBuffer(val as number)}
+            />
+          </Box>
+        </Box>
       </Paper>
       <DeckGL
         layers={layers}
@@ -210,10 +267,11 @@ export default function App() {
         }
         controller={true}
         getTooltip={({ object, layer }) => {
-          if (!object || layer?.id !== "agebs") return null;
-          const p = object.properties;
-          return {
-            html: `
+          if (!object || layer?.id == "buffer") return null;
+          else if (layer?.id == "agebs") {
+            const p = object.properties;
+            return {
+              html: `
         <div style="line-height: 1.8; font-size: 12px;">
           <b>AGEB: ${p.CVEGEO}</b>
           <hr style="margin: 4px 0; opacity: 0.3"/>
@@ -225,15 +283,36 @@ export default function App() {
           <div>% mujeres casadas: <b>${p.CASAD}%</b></div>
         </div>
       `,
-            style: {
-              backgroundColor: "rgba(20,20,20,0.85)",
-              color: "white",
-              fontSize: "12px",
-              borderRadius: "6px",
-              padding: "8px 12px",
-              textAlign: "left",
-            },
-          };
+              style: {
+                backgroundColor: "rgba(20,20,20,0.85)",
+                color: "white",
+                fontSize: "12px",
+                borderRadius: "6px",
+                padding: "8px 12px",
+                textAlign: "left",
+              },
+            };
+          } else if (layer?.id == "centros") {
+            const p = object.properties;
+            return {
+              html: `
+        <div style="line-height: 1.8; font-size: 12px;">
+          <b>Nombre: ${p.nom_estab}</b>
+          <hr style="margin: 4px 0; opacity: 0.3"/>
+          <div>Tipo: <b>${p.nombre_act}</b></div>
+          <div>Personal: <b>${p.per_ocu}</b></div>
+        </div>
+      `,
+              style: {
+                backgroundColor: "rgba(20,20,20,0.85)",
+                color: "white",
+                fontSize: "12px",
+                borderRadius: "6px",
+                padding: "8px 12px",
+                textAlign: "left",
+              },
+            };
+          }
         }}
       >
         <Map reuseMaps mapStyle={MAP_STYLE} />
